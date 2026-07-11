@@ -1,0 +1,5 @@
+*.o
+a.out
+bf16mma
+results/*.log
+*.dSYM/
