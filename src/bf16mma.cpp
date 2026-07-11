@@ -29,6 +29,9 @@ static float dot_bfdot(const uint16_t* a, const uint16_t* b, int K){
 }
 // naive software: widen bf16->fp32, fp32 multiply, fp32 sequential accumulate
 static float dot_naive(const float* a,const float* b,int K){ float s=0; for(int k=0;k<K;k++) s+=a[k]*b[k]; return s; }
+static float dot_naive4(const float* a,const float* b,int K){ // 4 fp32 accumulators (matched-lane sw control)
+  float s0=0,s1=0,s2=0,s3=0; int k=0; for(;k+4<=K;k+=4){ s0+=a[k]*b[k]; s1+=a[k+1]*b[k+1]; s2+=a[k+2]*b[k+2]; s3+=a[k+3]*b[k+3]; }
+  float s=s0+s1+s2+s3; for(;k<K;k++) s+=a[k]*b[k]; return s; }
 static float dot_kahan(const float* a,const float* b,int K){ float s=0,c=0; for(int k=0;k<K;k++){ float y=a[k]*b[k]-c; float t=s+y; c=(t-s)-y; s=t;} return s; }
 static double dot_f64(const float* a,const float* b,int K){ double s=0; for(int k=0;k<K;k++) s+=(double)a[k]*(double)b[k]; return s; }
 
@@ -70,7 +73,7 @@ int main(int argc,char**argv){
     printf("{\"rows\":[\n");
     int Ks[]={8,16,32,64,128,256,512,1024,2048,4096}; bool first=true;
     for(int K:Ks){
-      int R=400; double eH=0,eS=0,eK=0; 
+      int R=400; double eH=0,eS=0,eK=0,eS4=0; 
       for(int r=0;r<R;r++){
         Rng g(1000+r*97+K); std::vector<float> af(K),bf(K); std::vector<uint16_t> ab(K),bb(K);
         double s2=0;
@@ -80,9 +83,10 @@ int main(int argc,char**argv){
         eH+=std::pow(relerr(dot_bfdot(ab.data(),bb.data(),K),orc,pnorm),2);
         eS+=std::pow(relerr(dot_naive(af.data(),bf.data(),K),orc,pnorm),2);
         eK+=std::pow(relerr(dot_kahan(af.data(),bf.data(),K),orc,pnorm),2);
+        eS4+=std::pow(relerr(dot_naive4(af.data(),bf.data(),K),orc,pnorm),2);
       }
-      printf("%s{\"K\":%d,\"bfdot_hw\":%.4e,\"naive_sw\":%.4e,\"kahan_sw\":%.4e}",first?"":",\n",K,
-             std::sqrt(eH/R),std::sqrt(eS/R),std::sqrt(eK/R)); first=false;
+      printf("%s{\"K\":%d,\"bfdot_hw\":%.4e,\"naive_sw\":%.4e,\"kahan_sw\":%.4e,\"naive4_sw\":%.4e}",first?"":",\n",K,
+             std::sqrt(eH/R),std::sqrt(eS/R),std::sqrt(eK/R),std::sqrt(eS4/R)); first=false;
     }
     printf("\n]}\n");
     return 0;

@@ -1,93 +1,105 @@
 {
-  "headline": "The M4's native bf16 matrix instruction (BFDOT/BFMMLA) is a rare accuracy-AND-speed WIN over naive scalar bf16->fp32 software accumulation: 5.4x faster AND up to ~2x more accurate (rel-error 0.54x naive at K=4096), the accuracy edge GROWING with reduction length -- because the instruction accumulates across 4 fp32 lanes (a shallow reduction tree) + ARM's fused rounding, vs the naive single sequential accumulator. BUT it is NOT bit-deterministic under tile regrouping (fp32 accumulate is non-associative; single/2-acc/reversed diverge ~4e-6 in low bits) -> BFMMLA GEMM results vary across thread counts/tile shapes. Compensated (Kahan) fp32 stays most accurate (flat ~2.6e-8) but ~5x slower. asm-confirmed (bfdot/bfmmla emitted, not scalarized).",
+  "headline": "The M4's bf16 matrix instruction (BFDOT/BFMMLA) buys SPEED, not accuracy. Exact fp64 oracle: BFDOT is ~6.8x faster than a naive scalar bf16->fp32 loop, but its accuracy 'win' over that loop is ENTIRELY accumulator-count (BFDOT uses 4 fp32 lanes, the naive scalar uses 1) -- a fair matched-lane 4-accumulator SOFTWARE fp32 loop is 1.2-1.3x MORE accurate than BFDOT at K>=256 (hw/naive4=1.24@4096). So ARM's fused bf16 rounding is slightly WORSE than plain fp32 accumulation; the multi-lane reduction tree is the only accuracy lever and software gets it for free. Bit-nondeterministic under regrouping (fp32 non-associative, ~4e-6). Takeaway: use bf16 matrix instructions for THROUGHPUT; for accuracy a 4-lane fp32 loop (or Kahan, flat ~2.6e-8) beats them.",
   "accuracy_sweep_rms_relerr": {
     "8": {
       "bfdot_hw": 8.2383e-09,
-      "naive_sw": 8.402e-09,
+      "naive1_seq_sw": 8.402e-09,
+      "naive4_matchedlane_sw": 8.8207e-09,
       "kahan_sw": 7.5309e-09,
-      "hw_over_naive": 0.9805165436800762
+      "hw_over_naive4": 0.9339734941671296
     },
     "16": {
       "bfdot_hw": 1.3174e-08,
-      "naive_sw": 1.6962e-08,
+      "naive1_seq_sw": 1.6962e-08,
+      "naive4_matchedlane_sw": 1.5247e-08,
       "kahan_sw": 1.1634e-08,
-      "hw_over_naive": 0.7766772786228039
+      "hw_over_naive4": 0.8640388273102905
     },
     "32": {
       "bfdot_hw": 2.9439e-08,
-      "naive_sw": 3.2471e-08,
+      "naive1_seq_sw": 3.2471e-08,
+      "naive4_matchedlane_sw": 2.778e-08,
       "kahan_sw": 2.3428e-08,
-      "hw_over_naive": 0.9066243725170152
+      "hw_over_naive4": 1.059719222462203
     },
     "64": {
       "bfdot_hw": 3.5264e-08,
-      "naive_sw": 3.8252e-08,
+      "naive1_seq_sw": 3.8252e-08,
+      "naive4_matchedlane_sw": 3.7668e-08,
       "kahan_sw": 2.43e-08,
-      "hw_over_naive": 0.9218864373104674
+      "hw_over_naive4": 0.9361792502920251
     },
     "128": {
       "bfdot_hw": 5.6019e-08,
-      "naive_sw": 6.1913e-08,
+      "naive1_seq_sw": 6.1913e-08,
+      "naive4_matchedlane_sw": 4.9274e-08,
       "kahan_sw": 2.8738e-08,
-      "hw_over_naive": 0.904801899439536
+      "hw_over_naive4": 1.1368876080691643
     },
     "256": {
       "bfdot_hw": 6.8869e-08,
-      "naive_sw": 9.4174e-08,
+      "naive1_seq_sw": 9.4174e-08,
+      "naive4_matchedlane_sw": 5.7787e-08,
       "kahan_sw": 2.6003e-08,
-      "hw_over_naive": 0.7312952619619004
+      "hw_over_naive4": 1.191773236194992
     },
     "512": {
       "bfdot_hw": 9.1132e-08,
-      "naive_sw": 1.253e-07,
+      "naive1_seq_sw": 1.253e-07,
+      "naive4_matchedlane_sw": 7.6981e-08,
       "kahan_sw": 2.5708e-08,
-      "hw_over_naive": 0.7273104549082203
+      "hw_over_naive4": 1.1838245800911913
     },
     "1024": {
       "bfdot_hw": 1.2921e-07,
-      "naive_sw": 2.0534e-07,
+      "naive1_seq_sw": 2.0534e-07,
+      "naive4_matchedlane_sw": 1.0104e-07,
       "kahan_sw": 2.6213e-08,
-      "hw_over_naive": 0.6292490503555079
+      "hw_over_naive4": 1.2788004750593824
     },
     "2048": {
       "bfdot_hw": 2.0843e-07,
-      "naive_sw": 3.8082e-07,
+      "naive1_seq_sw": 3.8082e-07,
+      "naive4_matchedlane_sw": 1.4659e-07,
       "kahan_sw": 2.8009e-08,
-      "hw_over_naive": 0.5473189433328082
+      "hw_over_naive4": 1.4218568797325875
     },
     "4096": {
       "bfdot_hw": 2.8517e-07,
-      "naive_sw": 5.3022e-07,
+      "naive1_seq_sw": 5.3022e-07,
+      "naive4_matchedlane_sw": 2.2955e-07,
       "kahan_sw": 2.7277e-08,
-      "hw_over_naive": 0.5378333521934291
+      "hw_over_naive4": 1.2423001524722284
     }
   },
   "predictions": {
-    "P1_hw_at_least_as_accurate": {
-      "hw_over_naive_K8": 0.9805165436800762,
-      "hw_over_naive_K4096": 0.5378333521934291,
-      "supported": true,
-      "note": "hw <= naive at every K, strictly better K>=256 (0.73->0.54)"
+    "P1_hw_more_accurate": {
+      "vs_naive1_seq_0.54x_but_strawman": true,
+      "vs_naive4_matched_lanes_hw_worse": 1.24,
+      "FALSIFIED_as_stated": true,
+      "note": "accuracy edge is accumulator-count not bf16-hardware; ARM fused rounding slightly hurts vs matched-lane fp32"
     },
     "P2_bit_determinism": {
-      "bfdot_regroup_bit_identical": false,
-      "divergence": "~4e-6 low bits (single/2acc/reversed differ)",
-      "note": "NOT deterministic under regrouping -- fp32 accumulate non-associative; positive control (naive fp32 fwd vs rev) also diverges = comparator live"
+      "bit_identical_under_regroup": false,
+      "note": "NOT deterministic (~4e-6 low bits); positive control live"
     },
-    "P3_error_growth_slower": {
-      "supported": true,
-      "note": "hw/naive ratio decreases with K (0.98@8 -> 0.54@4096) = hw error grows slower"
+    "P3_error_growth": {
+      "note": "naive4 grows same rate as hw -> the multi-accumulator tree, not bf16, sets the growth"
     },
     "P4_throughput": {
-      "speedup_vs_naive_fp32": 5.41,
+      "speedup_median": 6.8,
+      "runs": [
+        6.82,
+        6.19,
+        6.99
+      ],
       "supported": true,
-      "note": "BFDOT 0.075 ns/MAC vs naive 0.40; 5.4x"
+      "note": "vs naive SCALAR fp32; vectorized fp32 would narrow it"
     },
-    "P5_placement": {
-      "note": "Kahan-fp32 most accurate (flat 2.6e-8) < BFDOT-hw < naive-bf16-sequential; hw sits between compensated fp32 and naive"
+    "P5_fp16_placement": {
+      "note": "fp16 reference NOT implemented (deferred); only falsifier verified (bf16-hw does not beat fp32/Kahan). Order: Kahan-fp32 < naive4-fp32 < BFDOT-hw < naive1-seq-bf16"
     }
   },
-  "asm_audit": "15 bfdot/bfmmla instructions emitted (hardware, not scalarized)",
-  "verification": "exact fp64 oracle; splitmix64 seeds; asm audit; determinism on raw bits w/ live positive control",
-  "bfmmla_scope": "Numerics characterized via BFDOT (the bf16 dot primitive) -- the exact operation whose fp32-accumulate + ARM rounding is under test. BFMMLA is the 2x4-tile matrix form using the IDENTICAL fp32 accumulator and rounding (gate-verified: BFMMLA tile [10 20 26 52] exact); its per-element accumulation numerics are the same as BFDOT. A full BFMMLA-tiled GEMM accuracy sweep with correct tile layout is a stated extension."
+  "asm_audit": "15 bfdot/bfmmla emitted; naive is a genuine scalar sequential fp32 chain (asm-confirmed)",
+  "bfmmla_scope": "numerics via BFDOT (the bf16 dot under test); BFMMLA gate-verified ([10 20 26 52] exact), same fp32 accumulator+rounding; BFMMLA GEMM EXPECTED (not measured) non-deterministic by the same non-associativity; full BFMMLA sweep a stated extension"
 }

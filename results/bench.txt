@@ -1,1 +1,3 @@
-[bench K=512] BFDOT 0.0578 ns/MAC | naive fp32 0.3735 ns/MAC | speedup 6.46x
+[bench K=512] BFDOT 0.0528 ns/MAC | naive fp32 0.3604 ns/MAC | speedup 6.82x
+[bench K=512] BFDOT 0.0566 ns/MAC | naive fp32 0.3501 ns/MAC | speedup 6.19x
+[bench K=512] BFDOT 0.0502 ns/MAC | naive fp32 0.3511 ns/MAC | speedup 6.99x
