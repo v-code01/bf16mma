@@ -1,0 +1,2 @@
+[determinism K=4096] BFDOT single=-10.340008 2acc=-10.340004 reversed=-10.340006 | bits: single==2acc? 0 single==rev? 0
+  positive control (naive fp32 fwd vs reversed): bit-equal? 0 (should be 0 = comparator live)
