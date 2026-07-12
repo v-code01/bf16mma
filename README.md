@@ -1,9 +1,9 @@
-# The M4's bf16 matrix instruction buys speed, not accuracy — and its "accuracy win" is a strawman
+# The M4's bf16 matrix instruction buys speed, not accuracy, and its "accuracy win" is a strawman
 
 The M4 CPU implements ARM's bf16 matrix extension (`FEAT_BF16: 1`, `FEAT_EBF16: 0`): `BFDOT` (bf16
 pairwise dot → fp32) and `BFMMLA` (bf16 2×4-tile matmul → fp32 2×2 tile), accumulating bf16 products
 into an fp32 register with ARM's mandated rounding. It's tempting to conclude these are "more accurate"
-because they beat a naive scalar bf16→fp32 loop. They don't — that comparison is a strawman.
+because they beat a naive scalar bf16→fp32 loop. They don't, that comparison is a strawman.
 
 ## Result: ~6.8× faster, but a fair software baseline is *more* accurate
 
@@ -21,24 +21,24 @@ BFDOT's lane count**; Kahan = compensated fp32:
 
 - **The "accuracy win" over the naive scalar loop is entirely accumulator count.** BFDOT accumulates
   across 4 fp32 lanes; the naive *sequential* baseline uses 1. Match the lane count in software (`naive4`,
-  4 fp32 accumulators, zero ARM bf16 rounding) and it is **1.2–1.3× *more* accurate than BFDOT** at every
-  K ≥ 256. So **ARM's fused bf16 rounding is slightly *worse* than plain fp32 accumulation** — the
+  4 fp32 accumulators, zero ARM bf16 rounding) and it is **1.2-1.3× *more* accurate than BFDOT** at every
+  K ≥ 256. So **ARM's fused bf16 rounding is slightly *worse* than plain fp32 accumulation**, the
   multi-lane reduction tree is the only accuracy lever, and software gets it for free. Compensated **Kahan
   fp32 is best** (flat ~2.6e-8), ~5× more accurate than either.
 - **Throughput is the real win (P4): ~6.8× faster** than the naive scalar fp32 loop (median of 3 runs;
-  ~0.05 vs ~0.35 ns/MAC) — one instruction does 8 bf16 MACs. Asm-audited: 15 `bfdot`/`bfmmla` emitted,
+  ~0.05 vs ~0.35 ns/MAC), one instruction does 8 bf16 MACs. Asm-audited: 15 `bfdot`/`bfmmla` emitted,
   not scalarized. (A *vectorized* fp32 baseline would narrow this toward ~1.6×; the 6.8× is vs a scalar
   loop, which is what "naive" means here.)
 - **Not bit-deterministic (P2).** The same BFDOT dot with different lane-groupings / reduction orders
-  diverges in the low bits (~4e-6 absolute) — the fp32 accumulate is non-associative. A live positive
+  diverges in the low bits (~4e-6 absolute), the fp32 accumulate is non-associative. A live positive
   control (naive fp32 forward vs reversed also diverges) confirms the comparator. By the same
   non-associativity, a BFMMLA GEMM is **expected** to vary bit-for-bit across tilings/threads (asserted,
-  not separately measured — see scope).
+  not separately measured, see scope).
 
 ## The takeaway
 
 If you're accelerating low-precision GEMV/GEMM on Apple silicon: reach for `BFDOT`/`BFMMLA` for
-**throughput** (~6.8× over a scalar loop). Do **not** reach for them expecting better accuracy — a
+**throughput** (~6.8× over a scalar loop). Do **not** reach for them expecting better accuracy, a
 4-lane fp32 software loop is *more* accurate than BFDOT (ARM's fused rounding costs you a little), and
 compensated summation is better still. bf16 hardware trades a little accuracy for a lot of speed; the
 "it's also more accurate" story only holds against a single-accumulator strawman.
@@ -47,11 +47,11 @@ compensated summation is better still. bf16 hardware trades a little accuracy fo
 
 | | Prediction | Outcome |
 |---|---|---|
-| **P1** | hw more accurate than naive; fused rounding helps | ❌ **falsified** — hw beats only the *sequential* strawman; a matched-lane fp32 loop is 1.24× more accurate; fused rounding slightly *hurts* |
-| **P2** | BFDOT not bit-identical under regrouping | ✅ diverges ~4e-6 (fp32 non-associative) |
-| **P3** | hw error grows slower with K | ⚠️ vs naive1 yes, but naive4 grows the same — it's the accumulator tree, not bf16 |
-| **P4** | BFDOT ≥ 3× faster than naive fp32 | ✅ ~6.8× (vs scalar) |
-| **P5** | bf16-hw between fp32 and fp16-accumulate | ⚠️ **partial** — fp16 reference not implemented (deferred to sibling fp16 studies); only the falsifier verified (bf16-hw doesn't beat fp32/Kahan) |
+| **P1** | hw more accurate than naive; fused rounding helps | FAIL **falsified**, hw beats only the *sequential* strawman; a matched-lane fp32 loop is 1.24× more accurate; fused rounding slightly *hurts* |
+| **P2** | BFDOT not bit-identical under regrouping | PASS diverges ~4e-6 (fp32 non-associative) |
+| **P3** | hw error grows slower with K | PARTIAL vs naive1 yes, but naive4 grows the same, it's the accumulator tree, not bf16 |
+| **P4** | BFDOT ≥ 3× faster than naive fp32 | PASS ~6.8× (vs scalar) |
+| **P5** | bf16-hw between fp32 and fp16-accumulate | PARTIAL **partial**, fp16 reference not implemented (deferred to sibling fp16 studies); only the falsifier verified (bf16-hw doesn't beat fp32/Kahan) |
 
 The honest, sharper finding: **bf16 matrix instructions are a throughput tool; their apparent accuracy
 advantage is an artifact of comparing against a single-accumulator baseline, and ARM's fused bf16
